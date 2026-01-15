@@ -2,10 +2,11 @@
 using Sdcb.PaddleInference;
 using Sdcb.PaddleOCR.Models;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Collections.Generic;
 
 namespace Sdcb.PaddleOCR;
 
@@ -155,7 +156,13 @@ public class PaddleOcrRecognizer : IDisposable
             {
                 throw new Exception($"PaddlePredictor(Recognizer) run failed.");
             }
-
+            //var mat = Cv2.ImRead("test.jpeg");
+            //var maxW = Math.Ceiling(mat.Width / 8.0);
+            //for (int i = 0; i < maxW; i++)
+            //{
+            //    Cv2.Line(mat, i*8, 0,i*8,mat.Height, Scalar.Red, 2, LineTypes.AntiAlias);
+            //}
+            //Cv2.ImWrite("test2.jpeg", mat);
             using (PaddleTensor output = predictor.GetOutputTensor(predictor.OutputNames[0]))
             {
                 float[] data = output.GetData<float>();
@@ -177,28 +184,49 @@ public class PaddleOcrRecognizer : IDisposable
                             float score = 0;
                             List<RecognizedChar> ocrRecognizerResultSingleChars = new();
                             int charIndex = 0;
+                            RecognizedChar lastRecognizedChar = default;
+                            var heigth = srcs[i].Height;
+                            var whRatio = modelHeight * 1.0 / heigth;
+
+                            var nw = 8 / whRatio;
+                            var nnw = (int)Math.Round(nw);
                             for (int n = 0; n < charCount; ++n)
                             {
                                 using Mat mat = Mat.FromPixelData(1, labelCount, MatType.CV_32FC1, dataPtr + (n + i * charCount) * labelCount * sizeof(float));
                                 int[] maxIdx = new int[2];
                                 mat.MinMaxIdx(out double _, out double maxVal, new int[0], maxIdx);
-
-                                if (maxIdx[1] > 0 && (!(n > 0 && maxIdx[1] == lastIndex)))
+                                if (maxIdx[1] > 0)
                                 {
-                                    score += (float)maxVal;
-                                    string character = Model.GetLabelByIndex(maxIdx[1]);
-                                    sb.Append(character);
-                                    
-                                    ocrRecognizerResultSingleChars.Add(new RecognizedChar(
-                                        character,
-                                        (float)maxVal,
-                                        charIndex
-                                    ));
-                                    charIndex++;
+                                    if (!(n > 0 && maxIdx[1] == lastIndex))
+                                    {
+                                        if (lastRecognizedChar != default)
+                                        {
+                                            ocrRecognizerResultSingleChars.Add(lastRecognizedChar);
+                                        }
+                                        score += (float)maxVal;
+                                        string character = Model.GetLabelByIndex(maxIdx[1]);
+                                        sb.Append(character);
+                                        lastRecognizedChar = new RecognizedChar(
+                                            character,
+                                            (float)maxVal,
+                                            charIndex,
+                                            new Rect((int)Math.Round(nw * n), 0, nnw, heigth)
+                                        );
+                                        charIndex++;
+                                    }
+                                    else
+                                    {
+                                        var orec = lastRecognizedChar.Rec;
+                                        lastRecognizedChar.Rec = new Rect(orec.X, orec.Y, orec.Width + nnw, orec.Height);
+                                        lastRecognizedChar.Score = Math.Max(lastRecognizedChar.Score, (float)maxVal);
+                                    }
                                 }
                                 lastIndex = maxIdx[1];
                             }
-
+                            if (lastRecognizedChar != default)
+                            {
+                                ocrRecognizerResultSingleChars.Add(lastRecognizedChar);
+                            }
                             return new PaddleOcrRecognizerResult(sb.ToString(), score / sb.Length, ocrRecognizerResultSingleChars);
                         })
                         .ToArray();

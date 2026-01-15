@@ -53,4 +53,10 @@
     <ProjectReference Include="..\..\src\Sdcb.PaddleOCR.Models.Online\Sdcb.PaddleOCR.Models.Online.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="639039801473289806.jpeg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

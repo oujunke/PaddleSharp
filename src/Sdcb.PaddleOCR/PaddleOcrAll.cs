@@ -119,7 +119,66 @@ public class PaddleOcrAll : IDisposable
             MathUtil.Clamp(rect.Right, 0, size.Width),
             MathUtil.Clamp(rect.Bottom, 0, size.Height));
     }
+    /// <summary>
+    /// RunDet
+    /// </summary>
+    /// <param name="src"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public RotatedRect[] RunDet(Mat src)
+    {
+        if (Enable180Classification && Classifier == null)
+        {
+            throw new Exception($"Unable to do 180 degree Classification when classifier model is not set.");
+        }
 
+        return Detector.Run(src);
+    }
+    /// <summary>
+    /// RunOcr
+    /// </summary>
+    /// <param name="srcs"></param>
+    /// <param name="recognizeBatchSize"></param>
+    /// <returns></returns>
+    public PaddleOcrRecognizerResult[] RunOcr(Mat[] srcs, int recognizeBatchSize = 0)
+    {
+        return Recognizer.Run(srcs, recognizeBatchSize);
+    }
+    /// <summary>
+    /// RunOcr
+    /// </summary>
+    /// <param name="src"></param>
+    /// <param name="rects"></param>
+    /// <param name="recognizeBatchSize"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public PaddleOcrResult RunOcr(Mat src, RotatedRect[] rects, int recognizeBatchSize = 0)
+    {
+        if (Enable180Classification && Classifier == null)
+        {
+            throw new Exception($"Unable to do 180 degree Classification when classifier model is not set.");
+        }
+        Mat[] mats =
+            rects.Select(rect =>
+            {
+                Mat roi = AllowRotateDetection ? GetRotateCropImage(src, rect) : src[GetCropedRect(rect.BoundingRect(), src.Size())];
+                return Enable180Classification ? Classifier!.Run(roi) : roi;
+            })
+            .ToArray();
+        try
+        {
+            return new PaddleOcrResult(Recognizer.Run(mats, recognizeBatchSize)
+                .Select((result, i) => new PaddleOcrResultRegion(rects[i], result.Text, result.Score, result.Chars))
+                .ToArray());
+        }
+        finally
+        {
+            foreach (Mat mat in mats)
+            {
+                mat.Dispose();
+            }
+        }
+    }
     /// <summary>
     /// Runs the OCR engine on the specified source image.
     /// </summary>
