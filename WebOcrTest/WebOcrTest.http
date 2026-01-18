@@ -1,0 +1,6 @@
+@WebOcrTest_HostAddress = http://localhost:5232
+
+GET {{WebOcrTest_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
